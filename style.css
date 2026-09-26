@@ -167,3 +167,32 @@ td {
 #copyBtn:hover:not(:disabled) {
   background-color: #732d91;
 }
+
+/* Open-source footer bar */
+.oss-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-top: 1px solid rgba(127, 127, 127, 0.25);
+  background: rgba(127, 127, 127, 0.06);
+  font-size: 10px;
+  line-height: 1;
+}
+.oss-bar__text { opacity: 0.7; }
+.oss-bar__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.8;
+  text-decoration: none;
+}
+.oss-bar__link:hover { opacity: 1; text-decoration: underline; }
+.oss-bar__link svg { width: 13px; height: 13px; fill: currentColor; flex-shrink: 0; }
+
+.oss-bar { margin-top: 12px; }
+

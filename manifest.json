@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Inventory Auth Auditor",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Bulk validator and auditor for ads.txt and app-ads.txt lines. Detect mismatches and export reports.",
   "permissions": ["storage"],
   "host_permissions": [
