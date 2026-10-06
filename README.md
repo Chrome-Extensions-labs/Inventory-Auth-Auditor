@@ -5,7 +5,7 @@ Enterprise-grade Chrome extension for high-volume `ads.txt` / `app-ads.txt` auth
 [![Gist](https://img.shields.io/badge/gist.github-version_of_this_repository-DCDCDC?style=for-the-badge&logo=github)](https://gist.github.com/OstinUA/cfe66c91a3d0276b1592f9ab66676a7d)
 
 [![Chrome Store](https://img.shields.io/badge/platform-Chrome_Extension-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://chromewebstore.google.com/search/OstinUA)
-[![Chrome Portfolio](https://img.shields.io/badge/Chrome_Web_Store-Portfolio-34A853?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ostinua.github.io/Chrome-Web-Store_Developer-List/)
+[![Chrome Portfolio](https://img.shields.io/badge/Chrome_Web_Store-Portfolio-34A853?style=for-the-badge&logo=google-chrome&logoColor=white)](https://devs-in-exile.pages.dev/extensions)
 
 [![Version](https://img.shields.io/badge/version-1.5.0-1f6feb?style=for-the-badge)](manifest.json)
 [![Build](https://img.shields.io/badge/build-manual%20verified-2ea44f?style=for-the-badge)](#testing)
