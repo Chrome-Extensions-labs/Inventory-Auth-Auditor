@@ -10,7 +10,7 @@
   <div class="container">
     <div class="settings-bar">
       <div>
-        <label>File Type:</label>
+        <label for="fileType">File Type:</label>
         <select id="fileType">
           <option value="app-ads.txt">app-ads.txt</option>
           <option value="ads.txt">ads.txt</option>
@@ -18,24 +18,24 @@
         </select>
       </div>
       <div>
-        <label>Filter:</label>
+        <label for="viewMode">Filter:</label>
         <select id="viewMode">
           <option value="all">Show All Results</option>
           <option value="errors">Errors / Warnings Only</option>
         </select>
       </div>
       <div>
-        <label>Layout:</label>
+        <label for="tableLayout">Layout:</label>
         <select id="tableLayout">
           <option value="standard">Standard</option>
           <option value="grouped">Grouped by Target</option>
         </select>
       </div>
       <div>
-        <label>Batch Size:</label>
+        <label for="batchSize">Batch Size:</label>
         <select id="batchSize">
           <option value="1">1</option>
-          <option value="2"selected>2</option>
+          <option value="2" selected>2</option>
           <option value="3">3</option>
           <option value="4">4</option>
           <option value="5">5</option>
@@ -44,11 +44,11 @@
     </div>
     <div class="row">
       <div class="col">
-        <label id="targetLabel">Target Websites</label>
+        <label id="targetLabel" for="targetList">Target Websites</label>
         <textarea id="targetList" placeholder="example.com&#10;another-site.com"></textarea>
       </div>
       <div class="col">
-        <label>Reference Lines</label>
+        <label for="refList">Reference Lines</label>
         <textarea id="refList" placeholder="google.com, pub-1234, DIRECT&#10;adnetwork.com, 9876, RESELLER"></textarea>
       </div>
     </div>
@@ -59,7 +59,7 @@
     <div class="progress-container" id="progressContainer">
       <div id="progressBar"></div>
     </div>
-    <div class="status-bar" id="statusText">Ready</div>
+    <div class="status-bar" id="statusText" role="status" aria-live="polite">Ready</div>
     <div class="stats-bar" id="statsBar"></div>
     <div class="table-wrapper">
       <table id="resultsTable">
@@ -88,6 +88,7 @@
     </a>
   </div>
 
+  <script src="core.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

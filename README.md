@@ -114,9 +114,10 @@ flowchart TD
     C -->|direct URL| E[Normalize input URL]
     D --> F[Fetch with retry and timeout]
     E --> F
-    F --> G{HTTPS success?}
-    G -->|No| H[HTTP fallback attempt]
+    F --> G{Fetch successful?}
+    G -->|Domain mode: connection failure| H[HTTP fallback attempt]
     G -->|Yes| I[Read text payload]
+    G -->|Other failure| K
     H --> I
     I --> J{Soft-404 or non-text?}
     J -->|Yes| K[Mark Error result rows]
@@ -315,3 +316,15 @@ This project is distributed under the `GPL-3.0` License. See [`LICENSE`](LICENSE
 [![Telegram](https://img.shields.io/badge/Telegram-FCTostin-2ca5e0?style=flat-square&logo=telegram)](https://t.me/FCTostin)
 
 If you find this tool useful, consider leaving a star on GitHub or supporting the author directly.
+
+### Network and export safety
+
+Requests omit cookies and other credentials and do not send a referrer. Direct URLs are
+used as entered (or default to HTTPS) and are not downgraded to HTTP on failure. In
+domain mode, a connection failure may still trigger an HTTP fallback for compatibility;
+HTTP responses are unencrypted and can be modified in transit. Responses larger than
+10 MiB are rejected. Stop cancels active requests and retry delays. The extension needs
+broad host access to audit user-specified sites; target and reference inputs are stored
+locally in Chrome. CSV and clipboard exports neutralize spreadsheet formula prefixes.
+
+Run the automated tests with `node --test tests/*.test.js` (Node.js 20 or newer).

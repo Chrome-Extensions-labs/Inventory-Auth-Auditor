@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let globalResults = [];
   let aborted = false;
+  let runController = null;
 
   loadState();
   updatePlaceholder();
@@ -70,15 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return div.innerHTML;
   }
 
-  function escapeCSV(str) {
-    if (/^[=+\-@\t\r]/.test(str)) {
-      str = "'" + str;
-    }
-    if (str.includes('"') || str.includes(',') || str.includes('\n')) {
-      return '"' + str.replace(/"/g, '""') + '"';
-    }
-    return '"' + str + '"';
-  }
+  const escapeCSV = AuditorCore.csvCell;
 
   function isLikelyNotPlainText(content, contentType) {
     if (contentType && !contentType.includes('text/plain') && !contentType.includes('text/csv')) {
@@ -100,47 +93,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  async function fetchWithRetry(url, retries = 3) {
-    let lastError = null;
-    for (let i = 0; i < retries; i++) {
-      if (aborted) throw new Error('Aborted');
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
-        const response = await fetch(url, { signal: controller.signal, cache: 'no-store', redirect: 'follow' });
-        clearTimeout(timeoutId);
-        if (!response.ok) {
-          lastError = new Error(`HTTP ${response.status}`);
-          continue;
-        }
-        const contentType = response.headers.get('content-type') || '';
-        const text = await response.text();
-        return { text, contentType };
-      } catch (e) {
-        lastError = e;
-        if (i < retries - 1) {
-          await new Promise(r => setTimeout(r, 1000 * (i + 1)));
-        }
-      }
-    }
-    throw lastError || new Error('Fetch failed');
-  }
+  const parseDomain = AuditorCore.parseDomain;
+  const buildUrlFromInput = AuditorCore.buildUrl;
 
-  function parseDomain(input) {
-    let d = input.trim();
-    d = d.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/[\/:?#].*$/, '');
-    d = d.toLowerCase();
-    if (!d || d.includes(' ')) return null;
-    return d;
-  }
-
-  function buildUrlFromInput(input) {
-    let url = input.trim();
-    if (!url) return null;
-    if (!/^https?:\/\//i.test(url)) {
-      url = 'https://' + url;
-    }
-    return url;
+  function fetchWithRetry(url) {
+    return AuditorCore.fetchWithRetry(url, runController.signal);
   }
 
   function getDisplayName(input, mode) {
@@ -167,16 +124,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       result = await fetchWithRetry(url);
     } catch (e) {
-      if (/^https:\/\//i.test(url)) {
-        try {
-          result = await fetchWithRetry(url.replace(/^https:\/\//i, 'http://'));
-        } catch (e2) {
-          error = e2.message === 'Aborted' ? 'Aborted' : (e2.message.startsWith('HTTP') ? e2.message : "Connection Error");
-        }
-      } else {
-        error = e.message === 'Aborted' ? 'Aborted' : (e.message.startsWith('HTTP') ? e.message : "Connection Error");
-      }
+      error = e.message || 'Connection Error';
     }
+
+    if (aborted) return;
 
     if (result && isLikelyNotPlainText(result.text, result.contentType)) {
       result = null;
@@ -208,12 +159,17 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       result = await fetchWithRetry(`https://${cleanDomain}/${filename}`);
     } catch (e) {
-      try {
-        result = await fetchWithRetry(`http://${cleanDomain}/${filename}`);
-      } catch (e2) {
-        error = e2.message === 'Aborted' ? 'Aborted' : (e2.message.startsWith('HTTP') ? e2.message : "Connection Error");
+      error = e.message || 'Connection Error';
+      if (!aborted && !/^HTTP |^File exceeds/.test(error)) {
+        try {
+          result = await fetchWithRetry(`http://${cleanDomain}/${filename}`);
+        } catch (fallbackError) {
+          error = fallbackError.message || 'Connection Error';
+        }
       }
     }
+
+    if (aborted) return;
 
     if (result && isLikelyNotPlainText(result.text, result.contentType)) {
       result = null;
@@ -231,53 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function processFileContent(content, targetDisplay, references) {
-    const ownerMatch = content.match(/OWNERDOMAIN\s*=\s*([^\s#]+)/i);
-    const managerMatch = content.match(/MANAGERDOMAIN\s*=\s*([^\s#]+)/i);
-    const owner = ownerMatch ? ownerMatch[1].toLowerCase() : '';
-    const manager = managerMatch ? managerMatch[1].toLowerCase() : '';
-    const ownerDisplay = [owner ? `Owner: ${owner}` : '', manager ? `Manager: ${manager}` : ''].filter(Boolean).join(', ');
-
-    const lines = content.split('\n').map(l => {
-      const c = l.split('#')[0].trim().replace(/[\u200B-\u200D\uFEFF\r]/g, '');
-      const p = c.split(',').map(s => s.trim());
-      if (p.length >= 2 && p[0] && p[1]) {
-        return {
-          d: p[0].toLowerCase(),
-          i: p[1].toLowerCase(),
-          t: p[2] ? p[2].toUpperCase().replace(/[^A-Z]/g, '') : null,
-          tagid: p[3] ? p[3].trim() : null
-        };
-      }
-      return null;
-    }).filter(Boolean);
-
-    const seen = new Set();
-    const duplicates = new Set();
-    lines.forEach(l => {
-      const key = `${l.d}|${l.i}|${l.t}`;
-      if (seen.has(key)) duplicates.add(key);
-      seen.add(key);
-    });
-
-    references.forEach(ref => {
-      const match = lines.find(l => l.d === ref.domain && l.i === ref.id);
-      let res = { target: targetDisplay, reference: ref.original, status: "Not Found", details: "Missing", owner: ownerDisplay, isError: true };
-
-      if (match) {
-        const key = `${match.d}|${match.i}|${match.t}`;
-        const isDuplicate = duplicates.has(key);
-        if (!ref.type || match.t === ref.type) {
-          res.status = "Valid";
-          res.details = "Matched" + (isDuplicate ? " (duplicate in file)" : "");
-          res.isError = false;
-        } else {
-          res.status = "Partial";
-          res.details = `Type Mismatch: found ${match.t || 'NONE'}, expected ${ref.type}`;
-          res.isError = true;
-        }
-      }
-      globalResults.push(res);
-    });
+    for (const result of AuditorCore.audit(content, targetDisplay, references)) {
+      globalResults.push(result);
+    }
   }
 
   function updateStats() {
@@ -397,19 +309,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const references = rawRefs.map(r => {
-      const parts = r.split(',').map(p => p.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        return { domain: parts[0].toLowerCase(), id: parts[1].toLowerCase(), type: parts[2] ? parts[2].toUpperCase().replace(/[^A-Z]/g, '') : null, original: r };
-      }
-      return null;
-    }).filter(Boolean);
+      const parsed = AuditorCore.parseLine(r);
+      return parsed ? { ...parsed, original: r } : null;
+    });
 
-    if (references.length === 0) {
-      statusText.innerText = 'No valid reference lines found. Format: domain, pubId, type';
+    const invalidLine = references.findIndex(ref => !ref);
+    if (invalidLine !== -1) {
+      statusText.innerText = `Invalid reference line ${invalidLine + 1}. Format: domain, publisher ID, type`;
       return;
     }
 
     aborted = false;
+    runController = new AbortController();
+    progressBar.style.width = '0%';
     runBtn.disabled = true;
     stopBtn.disabled = false;
     progressContainer.style.display = 'block';
@@ -419,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statsBar.innerHTML = '';
     globalResults = [];
 
-    const BATCH_SIZE = parseInt(batchSizeSel.value, 10);
+    const BATCH_SIZE = Math.max(1, Math.min(5, Number.parseInt(batchSizeSel.value, 10) || 2));
     const startTime = Date.now();
 
     for (let i = 0; i < targets.length; i += BATCH_SIZE) {
@@ -432,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await Promise.all(batch.map(t => processDomain(t, mode, references)));
       }
 
+      if (aborted) break;
       const done = Math.min(i + batch.length, targets.length);
       const percent = Math.round((done / targets.length) * 100);
       progressBar.style.width = `${percent}%`;
@@ -455,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   stopBtn.addEventListener('click', () => {
     aborted = true;
+    runController?.abort();
     stopBtn.disabled = true;
     statusText.innerText = 'Stopping...';
   });
@@ -528,13 +442,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const orig = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
       setTimeout(() => { copyBtn.textContent = orig; }, 1500);
-    });
+    }).catch(() => { statusText.innerText = 'Could not copy results to the clipboard.'; });
   });
+
+  function clipboardCell(value) {
+    return AuditorCore.safeCell(value).replace(/[\t\r\n]/g, ' ');
+  }
 
   function copyStandardText() {
     const lines = ['Target\tReference\tStatus\tDetails\tOwner'];
     globalResults.forEach(r => {
-      lines.push(`${r.target}\t${r.reference}\t${r.status}\t${r.details}\t${r.owner}`);
+      lines.push(`${clipboardCell(r.target)}\t${clipboardCell(r.reference)}\t${clipboardCell(r.status)}\t${clipboardCell(r.details)}\t${clipboardCell(r.owner)}`);
     });
     return lines.join('\n');
   }
@@ -551,20 +469,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const lines = [header];
     grouped.forEach((group, target) => {
-      let line = target;
+      let line = clipboardCell(target);
       for (let i = 0; i < maxRefs; i++) {
         if (i < group.refs.length) {
           const r = group.refs[i];
-          line += `\t${r.reference}\t${r.status}\t${r.details}`;
+          line += `\t${clipboardCell(r.reference)}\t${clipboardCell(r.status)}\t${clipboardCell(r.details)}`;
         } else {
           line += '\t\t\t';
         }
       }
-      line += `\t${group.owner}`;
+      line += `\t${clipboardCell(group.owner)}`;
       lines.push(line);
     });
     return lines.join('\n');
   }
 
-  viewModeSel.addEventListener('change', renderTable);
 });
